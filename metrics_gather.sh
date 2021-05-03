@@ -228,6 +228,19 @@ av1)
     AOMDEC_OPTS+=" --output-bit-depth=$DEPTH"
   fi
   $($TIMERDEC $AOMDEC --codec=$CODEC $AOMDEC_OPTS -o $BASENAME.y4m $BASENAME.ivf)
+
+  if [ $ENCODING_MODE = "bitrate" ]; then
+    SIZE=$(stat -c %s $BASENAME.ivf)
+    anchor_bitrate
+    rm $BASENAME.ivf
+
+    # Perform the encode again in two-pass mode using the anchor bitrate.
+    $($TIMER $AOMENC --codec=$CODEC --ivf --frame-parallel=0 --tile-columns=0 --auto-alt-ref=2 --cpu-used=0 --passes=2 --threads=1 --kf-min-dist=$KFINT --kf-max-dist=$KFINT --lag-in-frames=25 --end-usage=cbr --target-bitrate=$BITRATE --test-decode=fatal -o $BASENAME.ivf $EXTRA_OPTIONS $FILE  > "$BASENAME-stdout.txt")
+    if $AOMDEC --help 2>&1 | grep output-bit-depth > /dev/null; then
+      AOMDEC_OPTS+=" --output-bit-depth=$DEPTH"
+    fi
+    $($TIMERDEC $AOMDEC --codec=$CODEC $AOMDEC_OPTS -o $BASENAME.y4m $BASENAME.ivf)
+  fi
   SIZE=$(stat -c %s $BASENAME.ivf)
   ;;
 av1-rt)
@@ -327,6 +340,7 @@ rav1e)
   if [ $ENCODING_MODE = "bitrate" ]; then
     SIZE=$(stat -c %s $BASENAME.ivf)
     anchor_bitrate
+    rm $BASENAME.ivf
 
     # Perform the encode again in single-pass mode using the anchor bitrate.
     $($TIMER $RAV1E $FILE --bitrate $BITRATE -o $BASENAME.ivf -r $BASENAME-rec.y4m --threads 1 $EXTRA_OPTIONS > $BASENAME-enc.out)
