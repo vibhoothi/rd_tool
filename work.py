@@ -57,6 +57,9 @@ class Run:
         self.status = 'running'
         self.work_items = []
         self.cancelled = False
+        self.suffix = '-daala.out'
+        self.k_value = ''
+        self.lambdarunid = ''
     def write_status(self):
         f = open(self.rundir+'/status.txt','w')
         f.write(self.status)
@@ -102,6 +105,9 @@ class Work:
         self.failed = False
         self.runid = ''
         self.slot = None
+        self.suffix = '-daala.out'
+        self.k_value = ''
+        self.lambdarunid = ''
     def cancel(self):
         self.failed = True
         self.done = True
@@ -210,6 +216,7 @@ class RDWork(Work):
             command = 'WORK_ROOT="'+slot.work_root+'" '
             command += 'DAALATOOL_ROOT="'+daalatool_dir+'"'
             command += ' x="'+str(work.quality) + '" '
+            command += ' k_value="'+str(work.k_value) + '" '
             command += 'CODEC="'+work.codec+'" '
             command += 'ENCODING_MODE="'+work.encoding_mode + '" '
             command += 'EXTRA_OPTIONS="'+work.extra_options + '" '
@@ -221,12 +228,15 @@ class RDWork(Work):
             for file in self.copy_back_files:
                 if slot.get_file(slot.work_root+'/'+work.filename+'-'+str(work.quality)+file,runs_dst_dir+'/'+work.runid+'/'+work.set+'/') != 0:
                     rd_print(self.log,'Failed to copy back '+work.filename+'-'+str(work.quality)+file+', continuing anyway')
+                if work.encoding_mode == 'lambdatune':
+                    if slot.get_file(slot.work_root+'/'+work.filename+'-'+str(work.quality)+'-'+str(work.k_value)+file,runs_dst_dir+'/'+work.runid+'/'+work.set+'/') != 0:
+                        rd_print(self.log,'Failed to copy back '+work.filename+'-'+str(work.quality)+'-'+str(work.k_value)+file+', continuing anyway')
             self.parse(stdout, stderr)
         except Exception as e:
             rd_print(self.log, 'Exception while running',self.get_name(),e)
             self.failed = True
     def write_results(self):
-        filename = (runs_dst_dir+'/'+self.runid+'/'+self.set+'/'+self.filename+'-daala.out').encode('utf-8')
+        filename = (runs_dst_dir+'/'+self.runid+'/'+self.set+'/'+self.filename+self.suffix).encode('utf-8')
         try:
             with open(filename,'r') as f:
                 lines = f.readlines()
@@ -244,6 +254,8 @@ class RDWork(Work):
                 f.write(line)
         #write vmaf xml in separate files
         xml_filename = (runs_dst_dir+'/'+self.runid+'/'+self.set+'/'+self.filename+'-'+str(self.quality)+'-libvmaf.xml').encode('utf-8')
+        if len(self.k_value) > 0:
+            xml_filename = (runs_dst_dir+'/'+self.runid+'/'+self.set+'/'+self.filename+'-'+str(self.quality)+'-'+self.k_value+'-libvmaf.xml').encode('utf-8')
         with open(xml_filename, 'w') as f:
             f.write(self.vmaf_xml)
     def get_name(self):
@@ -271,6 +283,8 @@ def create_rdwork(run, video_filenames):
             work.set = run.set
             work.filename = filename
             work.extra_options = run.extra_options
+            work.k_value = run.k_value
+            work.suffix = run.suffix
             if run.save_encode:
                 work.no_delete = True
                 if work.codec == 'av1' or work.codec == 'av1-rt' or work.codec == 'rav1e' or work.codec == 'svt-av1' or work.codec == 'av1-cbr' or work.codec == 'av1-cbr2':

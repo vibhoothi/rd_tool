@@ -126,7 +126,12 @@ echo $$ > pid
 
 FILE=$1
 
-BASENAME="$(basename $FILE)-$x"
+if [ $ENCODING_MODE = "lambdatune" ]; then
+    BASENAME="$(basename $FILE)-$x-$k_value"
+else
+    BASENAME="$(basename $FILE)-$x"
+fi
+
 rm "$BASENAME.out" 2> /dev/null || true
 
 WIDTH=$(head -1 $FILE | tr ' ' '\n' | grep -E '\bW' | tr -d 'W')
@@ -229,7 +234,7 @@ av1)
   fi
   $($TIMERDEC $AOMDEC --codec=$CODEC $AOMDEC_OPTS -o $BASENAME.y4m $BASENAME.ivf)
 
-  if [ $ENCODING_MODE = "bitrate" ]; then
+  if [[ $ENCODING_MODE = "bitrate" || $ENCODING_MODE = "lambdatune" ]]; then
     SIZE=$(stat -c %s $BASENAME.ivf)
     anchor_bitrate
     rm $BASENAME.ivf
