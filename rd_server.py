@@ -18,7 +18,12 @@ config_dir = os.getenv("CONFIG_DIR", os.getcwd())
 runs_dst_dir = os.getenv("RUNS_DST_DIR", os.path.join(os.getcwd(), "../runs"))
 codecs_src_dir = os.getenv("CODECS_SRC_DIR", os.path.join(os.getcwd(), ".."))
 
-video_sets_f = codecs.open(os.path.join(config_dir, 'sets.json'),'r',encoding='utf-8')
+video_sets_f = codecs.open(
+    os.path.join(
+        config_dir,
+        'sets.json'),
+    'r',
+    encoding='utf-8')
 video_sets = json.load(video_sets_f)
 
 machines = []
@@ -31,9 +36,10 @@ args = {}
 scheduler_tasks = queue.Queue()
 
 config = {
-  'runs': runs_dst_dir,
-  'codecs': codecs_src_dir,
+    'runs': runs_dst_dir,
+    'codecs': codecs_src_dir,
 }
+
 
 def lookup_run_by_id(run_id):
     for run in run_list:
@@ -41,9 +47,11 @@ def lookup_run_by_id(run_id):
             return run
     return None
 
+
 class SchedulerTask:
     def get(self):
         pass
+
 
 class CancelHandler(tornado.web.RequestHandler):
     def get(self):
@@ -54,17 +62,23 @@ class CancelHandler(tornado.web.RequestHandler):
         scheduler_tasks.put(task)
         self.write('ok')
 
+
 class CancelTask(SchedulerTask):
     def __init__(self):
         self.run_id = None
+
     def run(self):
         global work_list
         global work_done
         run_id = self.run_id
-        rd_print(None,'Cancelling '+run_id)
+        rd_print(None, 'Cancelling ' + run_id)
         run = lookup_run_by_id(run_id)
         if not run:
-            rd_print(None,'Could not cancel '+run_id+'. run_id not found.')
+            rd_print(
+                None,
+                'Could not cancel ' +
+                run_id +
+                '. run_id not found.')
             return
         run.cancel()
         for work in work_list[:]:
@@ -75,6 +89,7 @@ class CancelTask(SchedulerTask):
                 rd_print(None, work.runid)
         rd_print(None, len(work_list))
 
+
 class RunSubmitHandler(tornado.web.RequestHandler):
     def get(self):
         global scheduler_tasks
@@ -84,9 +99,11 @@ class RunSubmitHandler(tornado.web.RequestHandler):
         scheduler_tasks.put(task)
         self.write('ok')
 
+
 class SubmitTask(SchedulerTask):
     def __init__(self):
         self.run_id = None
+
     def run(self):
         global work_list
         global run_list
@@ -114,10 +131,10 @@ class SubmitTask(SchedulerTask):
         except FileExistsError:
             pass
         if 'qualities' in info:
-          if info['qualities'] != '':
-              run.quality = info['qualities'].split()
+            if info['qualities'] != '':
+                run.quality = info['qualities'].split()
         if 'extra_options' in info:
-          run.extra_options = info['extra_options']
+            run.extra_options = info['extra_options']
         if 'save_encode' in info:
             if info['save_encode']:
                 run.save_encode = True
@@ -139,14 +156,17 @@ class SubmitTask(SchedulerTask):
                     abrun.bindir = config['codecs'] + '/' + info['codec']
                     abrun.prefix = run.rundir + '/' + run.set
                     run_list.append(abrun)
-                    abrun.work_items.extend(create_abwork(abrun, video_filenames))
+                    abrun.work_items.extend(
+                        create_abwork(abrun, video_filenames))
                     work_list.extend(abrun.work_items)
                     pass
+
 
 class WorkListHandler(tornado.web.RequestHandler):
     def get(self):
         self.set_header("Content-Type", "application/json")
         self.write(json.dumps([w.get_name() for w in work_list]))
+
 
 class RunStatusHandler(tornado.web.RequestHandler):
     def get(self):
@@ -164,6 +184,7 @@ class RunStatusHandler(tornado.web.RequestHandler):
                     run_json['completed'] += 1
             runs.append(run_json)
         self.write(json.dumps(runs))
+
 
 class MachineUsageHandler(tornado.web.RequestHandler):
     def get(self):
@@ -185,6 +206,7 @@ class MachineUsageHandler(tornado.web.RequestHandler):
         self.write(json.dumps(machine_usage))
         self.set_header("Content-Type", "application/json")
 
+
 class FreeSlotsHandler(tornado.web.RequestHandler):
     def get(self):
         global free_slots
@@ -197,6 +219,7 @@ class FreeSlotsHandler(tornado.web.RequestHandler):
             else:
                 slot_text.append('None')
         self.write(json.dumps(slot_text))
+
 
 class ExecuteTick(tornado.web.RequestHandler):
     def get(self):
@@ -211,14 +234,17 @@ def main():
     global args
     parser = argparse.ArgumentParser(description='Run AWCY scheduler daemon.')
     parser.add_argument('-machineconf')
-    parser.add_argument('-port',default=4000)
+    parser.add_argument('-port', default=4000)
     parser.add_argument('-awsgroup', default='nonexistent_group')
     parser.add_argument('-max-machines', default=3, type=int)
     args = parser.parse_args()
     if args.machineconf:
         machineconf = json.load(open(args.machineconf, 'r'))
         for m in machineconf:
-            machines.append(sshslot.Machine(m['host'],m['user'],m['cores'],m['work_root'],str(m['port']),m['media_path']))
+            machines.append(
+                sshslot.Machine(
+                    m['host'], m['user'], m['cores'], m['work_root'], str(
+                        m['port']), m['media_path']))
         for machine in machines:
             slots.extend(machine.get_slots())
         free_slots.extend(reversed(slots))
@@ -230,18 +256,19 @@ def main():
             (r"/free_slots.json", FreeSlotsHandler),
             (r"/submit", RunSubmitHandler),
             (r"/cancel", CancelHandler),
-            (r"/execute_tick",ExecuteTick)
+            (r"/execute_tick", ExecuteTick)
         ],
         static_path=os.path.join(os.path.dirname(__file__), "static"),
         xsrf_cookies=True,
         debug=False,
-        )
+    )
     app.listen(args.port)
     ioloop = tornado.ioloop.IOLoop.current()
     if not args.machineconf:
         machine_allocator_tick()
     scheduler_tick()
     ioloop.start()
+
 
 def machine_allocator_tick():
     global slots
@@ -263,11 +290,12 @@ def machine_allocator_tick():
         machines = []
         slots = []
         free_slots = []
-        #awsremote.stop_machines(args.awsgroup)
+        # awsremote.stop_machines(args.awsgroup)
     try:
-        updated_machines = awsremote.get_machines(args.max_machines, args.awsgroup)
-    except:
-        tornado.ioloop.IOLoop.current().call_later(60,machine_allocator_tick)
+        updated_machines = awsremote.get_machines(
+            args.max_machines, args.awsgroup)
+    except BaseException:
+        tornado.ioloop.IOLoop.current().call_later(60, machine_allocator_tick)
         return
     print(updated_machines)
     for m in machines:
@@ -278,7 +306,7 @@ def machine_allocator_tick():
                 slots.remove(s)
                 try:
                     free_slots.remove(s)
-                except:
+                except BaseException:
                     pass
             machines.remove(m)
     for um in updated_machines:
@@ -290,13 +318,15 @@ def machine_allocator_tick():
             slots.extend(new_slots)
             free_slots.extend(new_slots)
             machines.append(um)
-    tornado.ioloop.IOLoop.current().call_later(60,machine_allocator_tick)
+    tornado.ioloop.IOLoop.current().call_later(60, machine_allocator_tick)
 
-def find_image_work(items, default = None):
+
+def find_image_work(items, default=None):
     for work in items:
         if work.run.set_type == 'image':
             return work
     return default
+
 
 def scheduler_tick():
     global slots
@@ -312,29 +342,39 @@ def scheduler_tick():
         try:
             task.run()
         except Exception as e:
-            rd_print(None,e)
-            rd_print(None,'Task failed.')
+            rd_print(None, e)
+            rd_print(None, 'Task failed.')
     # look for completed work
     for slot in slots:
-        if slot.busy == False and slot.work != None:
+        if slot.busy == False and slot.work is not None:
             if slot.work.failed == False:
                 slot.work.done = True
                 try:
                     slot.work.write_results()
                 except Exception as e:
                     rd_print(None, e)
-                    rd_print('Failed to write results for work item',slot.work.get_name())
+                    rd_print(
+                        'Failed to write results for work item',
+                        slot.work.get_name())
                 work_done.append(slot.work)
-                rd_print(slot.work.log,slot.work.get_name(),'finished.')
+                rd_print(slot.work.log, slot.work.get_name(), 'finished.')
             elif slot.work.retries < max_retries and not slot.work.run.cancelled and (slot.p.p is None or not slot.p.p.returncode == 98):
                 slot.work.retries += 1
-                rd_print(slot.work.log,'Retrying work ',slot.work.get_name(),'...',slot.work.retries,'of',max_retries,'retries.')
+                rd_print(
+                    slot.work.log,
+                    'Retrying work ',
+                    slot.work.get_name(),
+                    '...',
+                    slot.work.retries,
+                    'of',
+                    max_retries,
+                    'retries.')
                 slot.work.failed = False
                 work_list.insert(0, slot.work)
             else:
                 slot.work.done = True
                 work_done.append(slot.work)
-                rd_print(slot.work.log,slot.work.get_name(),'given up on.')
+                rd_print(slot.work.log, slot.work.get_name(), 'given up on.')
             slot.clear_work()
             free_slots.append(slot)
     # fill empty slots with new work
@@ -343,7 +383,8 @@ def scheduler_tick():
             slot = free_slots.pop()
             work = work_list[0]
             # search for image work if there is only one slot available
-            # allows prioritizing image runs without making scheduler the bottleneck
+            # allows prioritizing image runs without making scheduler the
+            # bottleneck
             if len(free_slots) == 0:
                 try:
                     work = find_image_work(work_list, work)
@@ -351,7 +392,12 @@ def scheduler_tick():
                     rd_print(None, e)
                     rd_print(None, 'Finding image work failed.')
             work_list.remove(work)
-            rd_print(work.log,'Encoding',work.get_name(),'on',slot.machine.host)
+            rd_print(
+                work.log,
+                'Encoding',
+                work.get_name(),
+                'on',
+                slot.machine.host)
             slot.start_work(work)
     # find runs where all work has been completed
     for run in run_list:
@@ -364,11 +410,12 @@ def scheduler_tick():
             try:
                 run.reduce()
             except Exception as e:
-                rd_print(run.log,e)
-                rd_print(run.log,'Failed to run reduce step on '+run.runid)
-            rd_print(run.log,'Finished '+run.runid)
+                rd_print(run.log, e)
+                rd_print(run.log, 'Failed to run reduce step on ' + run.runid)
+            rd_print(run.log, 'Finished ' + run.runid)
             run.finish()
-    tornado.ioloop.IOLoop.current().call_later(1,scheduler_tick)
+    tornado.ioloop.IOLoop.current().call_later(1, scheduler_tick)
+
 
 if __name__ == "__main__":
     main()
