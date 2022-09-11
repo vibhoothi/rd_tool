@@ -21,11 +21,29 @@ codecs_src_dir = os.getenv("CODECS_SRC_DIR", os.path.join(os.getcwd(), ".."))
 video_sets_f = codecs.open(os.path.join(config_dir, 'sets.json'),'r',encoding='utf-8')
 video_sets = json.load(video_sets_f)
 
+# CTC Configs
+# LD : ctc_sets_mandatory
+# RA: ctc_sets_mandatory  + ctc_sets_optional
+# AI: ctc_sets_mandatory_ai + ctc_sets_optional
+# AS: A1 with Downsampling
+ctc_sets_mandatory = [
+    "aomctc-a1-4k",
+    "aomctc-a2-2k",
+    "aomctc-a3-720p",
+    "aomctc-a4-360p",
+    "aomctc-a5-270p",
+    "aomctc-b1-syn"]
+ctc_sets_mandatory_ai = ctc_sets_mandatory + \
+    ["aomctc-f1-hires", "aomctc-f2-midres"]
+ctc_sets_optional = ["aomctc-g1-hdr-4k",
+                     "aomctc-g2-hdr-2k", "aomctc-e-nonpristine"]
+
 machines = []
 slots = []
 free_slots = []
 work_list = []
 run_list = []
+run_set_list = []
 work_done = []
 args = {}
 scheduler_tasks = queue.Queue()
@@ -90,6 +108,7 @@ class SubmitTask(SchedulerTask):
     def run(self):
         global work_list
         global run_list
+        global run_set_list
         run_id = self.run_id
         rundir = config['runs'] + '/' + run_id
         info_file_path = rundir + '/info.json'
@@ -102,46 +121,64 @@ class SubmitTask(SchedulerTask):
         run.runid = run_id
         run.rundir = config['runs'] + '/' + run_id
         run.log = log_file
-        run.set = info['task']
-        if 'arch' in info:
-            run.arch = info['arch']
+        if type(info['ctcSets']) is list:
+            run_set_list = info['ctcSets']
         else:
-            run.arch = 'x86_64'
-        run.bindir = run.rundir + '/' + run.arch + '/'
-        run.prefix = run.rundir + '/' + run.set
-        try:
-            os.mkdir(run.prefix)
-        except FileExistsError:
-            pass
-        if 'qualities' in info:
-          if info['qualities'] != '':
-              run.quality = info['qualities'].split()
-        if 'extra_options' in info:
-          run.extra_options = info['extra_options']
-        if 'save_encode' in info:
-            if info['save_encode']:
-                run.save_encode = True
-        run.status = 'running'
-        run.write_status()
-        run_list.append(run)
-        video_filenames = video_sets[run.set]['sources']
-        run.set_type = video_sets[run.set].get('type', 'undef')
-        run.work_items = create_rdwork(run, video_filenames)
-        work_list.extend(run.work_items)
-        if False:
-            if 'ab_compare' in info:
-                if info['ab_compare']:
-                    abrun = ABRun(info['codec'])
-                    abrun.runid = run_id
-                    abrun.rundir = config['runs'] + '/' + run_id
-                    abrun.log = log_file
-                    abrun.set = info['task']
-                    abrun.bindir = config['codecs'] + '/' + info['codec']
-                    abrun.prefix = run.rundir + '/' + run.set
-                    run_list.append(abrun)
-                    abrun.work_items.extend(create_abwork(abrun, video_filenames))
-                    work_list.extend(abrun.work_items)
-                    pass
+            if info['ctcSets'] == 'aomctc-all':
+                if info['codec'] == 'av2-ai':
+                  run_set_list = ctc_sets_mandatory_ai + ctc_sets_optional
+                elif info['codec'] == 'av2-ra-st' or info['codec'] == 'av2-ra':
+                  run_set_list = ctc_sets_mandatory + ctc_sets_optional
+                elif info['codec'] == 'av2-ld':
+                  run_set_list = ctc_sets_mandatory
+            elif info['ctcSets'] == 'aomctc-mandatory':
+                if info['codec'] == 'av2-ra-st' or info['codec'] == 'av2-ra' or info['codec'] == 'av2-ld':
+                  run_set_list = ctc_sets_mandatory
+                elif info['codec'] == 'av2-ai':
+                  run_set_list = ctc_sets_mandatory_ai
+            else:
+              run_set_list = [info['task']]
+        for this_video in run_set_list:
+            run.set = this_video
+            if 'arch' in info:
+                run.arch = info['arch']
+            else:
+                run.arch = 'x86_64'
+            run.bindir = run.rundir + '/' + run.arch + '/'
+            run.prefix = run.rundir + '/' + run.set
+            try:
+                os.mkdir(run.prefix)
+            except FileExistsError:
+                pass
+            if 'qualities' in info:
+              if info['qualities'] != '':
+                  run.quality = info['qualities'].split()
+            if 'extra_options' in info:
+              run.extra_options = info['extra_options']
+            if 'save_encode' in info:
+                if info['save_encode']:
+                    run.save_encode = True
+            run.status = 'running'
+            run.write_status()
+            run_list.append(run)
+            video_filenames = video_sets[run.set]['sources']
+            run.set_type = video_sets[run.set].get('type', 'undef')
+            run.work_items = create_rdwork(run, video_filenames)
+            work_list.extend(run.work_items)
+            if False:
+                if 'ab_compare' in info:
+                    if info['ab_compare']:
+                        abrun = ABRun(info['codec'])
+                        abrun.runid = run_id
+                        abrun.rundir = config['runs'] + '/' + run_id
+                        abrun.log = log_file
+                        abrun.set = info['task']
+                        abrun.bindir = config['codecs'] + '/' + info['codec']
+                        abrun.prefix = run.rundir + '/' + run.set
+                        run_list.append(abrun)
+                        abrun.work_items.extend(create_abwork(abrun,    video_filenames))
+                        work_list.extend(abrun.work_items)
+                        pass
 
 class WorkListHandler(tornado.web.RequestHandler):
     def get(self):
@@ -303,6 +340,7 @@ def scheduler_tick():
     global free_slots
     global work_list
     global run_list
+    global run_set_list
     global work_done
     global scheduler_tasks
     max_retries = 5
@@ -362,6 +400,8 @@ def scheduler_tick():
         if done:
             run_list.remove(run)
             try:
+                # Explicty set the first Task ID as the Prefix for average
+                run.prefix = run.rundir + '/' + run_set_list[0]
                 run.reduce()
             except Exception as e:
                 rd_print(run.log,e)
