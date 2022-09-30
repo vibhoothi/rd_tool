@@ -219,14 +219,14 @@ class RDWork(Work):
             slot.start_shell(command)
             (stdout, stderr) = slot.gather()
             for file in self.copy_back_files:
-                if slot.get_file(slot.work_root+'/'+work.filename+'-'+str(work.quality)+file,runs_dst_dir+'/'+work.runid+'/'+work.set+'/') != 0:
+                if slot.get_file(slot.work_root+'/'+work.filename+'-'+str(work.quality)+file,runs_dst_dir+'/'+work.runid+'/'+self.codec+'/'+work.set+'/') != 0:
                     rd_print(self.log,'Failed to copy back '+work.filename+'-'+str(work.quality)+file+', continuing anyway')
             self.parse(stdout, stderr)
         except Exception as e:
             rd_print(self.log, 'Exception while running',self.get_name(),e)
             self.failed = True
     def write_results(self):
-        filename = (runs_dst_dir+'/'+self.runid+'/'+self.set+'/'+self.filename+'-daala.out').encode('utf-8')
+        filename = (runs_dst_dir+'/'+self.runid+'/'+self.codec+'/'+self.set+'/'+self.filename+'-daala.out').encode('utf-8')
         try:
             with open(filename,'r') as f:
                 lines = f.readlines()
@@ -243,7 +243,7 @@ class RDWork(Work):
             for line in lines:
                 f.write(line)
         #write vmaf xml in separate files
-        xml_filename = (runs_dst_dir+'/'+self.runid+'/'+self.set+'/'+self.filename+'-'+str(self.quality)+'-libvmaf.xml').encode('utf-8')
+        xml_filename = (runs_dst_dir+'/'+self.runid+'/'+self.codec+'/'+self.set+'/'+self.filename+'-'+str(self.quality)+'-libvmaf.xml').encode('utf-8')
         with open(xml_filename, 'w') as f:
             f.write(self.vmaf_xml)
     def get_name(self):
