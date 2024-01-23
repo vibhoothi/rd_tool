@@ -188,16 +188,38 @@ daala)
   rm -f "00000000out-$BASENAME.y4m"
   "$DUMP_VIDEO" "$BASENAME.ogv" -o "$BASENAME.y4m"
   ;;
-x264)
+x264 | x264-as-ctc)
   $($TIMER $X264 --dump-yuv $BASENAME.yuv --preset placebo --min-keyint $KFINT --keyint $KFINT --no-scenecut --crf=$x -o $BASENAME.x264 $EXTRA_OPTIONS $FILE  > "$BASENAME-stdout.txt")
   $YUV2YUV4MPEG $BASENAME -w$WIDTH -h$HEIGHT -an0 -ad0 -c420mpeg2
   SIZE=$(stat -c %s $BASENAME.x264)
   ENC_EXT='.x264'
+  case $CODEC in
+    x264-as-ctc)
+    if [ $((WIDTH)) -ne 1920 ] && [ $((HEIGHT)) -ne 1080 ]; then
+      # Change source file to be 1080p
+      FILE=$(sed -e 's/\(to256x144_lanc\|to384x216_lanc\|to512x288_lanc\|to640x360_lanc\|to768x432_lanc\|to960x540_lanc\|to1280x720_lanc\)//' <<< $FILE)
+    fi
+      # Use FFmpeg to  upscale and compute reduced-libvmaf as they are fast
+      # Reduced-libvmaf: LIBVMAF - {CIEDE2000, MS-SSIM, CAMBI, PSNR_HVS}
+      ffmpeg -hide_banner -loglevel error -threads 1 -y -nostdin -r 25 -i $BASENAME.y4m -r 25 -i $FILE -lavfi '[0:v]scale=1920x1080:flags=lanczos+accurate_rnd+full_chroma_int:sws_dither=none:param0=5[main];[main][1:v]libvmaf=aom_ctc=1:log_path='$BASENAME-vmaf.xml':log_fmt=xml' -f null -
+      ;;
+  esac
   ;;
-x265)
+x265 | x265-as-ctc)
   $($TIMER $X265 -r $BASENAME.y4m --preset slow --frame-threads 1 --min-keyint $KFINT --keyint $KFINT --no-scenecut --crf=$x -o $BASENAME.x265 $EXTRA_OPTIONS $FILE  > "$BASENAME-stdout.txt")
   SIZE=$(stat -c %s $BASENAME.x265)
   ENC_EXT='.x265'
+  case $CODEC in
+    x265-as-ctc)
+    if [ $((WIDTH)) -ne 1920 ] && [ $((HEIGHT)) -ne 1080 ]; then
+      # Change source file to be 1080p
+      FILE=$(sed -e 's/\(to256x144_lanc\|to384x216_lanc\|to512x288_lanc\|to640x360_lanc\|to768x432_lanc\|to960x540_lanc\|to1280x720_lanc\)//' <<< $FILE)
+    fi
+      # Use FFmpeg to  upscale and compute reduced-libvmaf as they are fast
+      # Reduced-libvmaf: LIBVMAF - {CIEDE2000, MS-SSIM, CAMBI, PSNR_HVS}
+      ffmpeg -hide_banner -loglevel error -threads 1 -y -nostdin -r 25 -i $BASENAME.y4m -r 25 -i $FILE -lavfi '[0:v]scale=1920x1080:flags=lanczos+accurate_rnd+full_chroma_int:sws_dither=none:param0=5[main];[main][1:v]libvmaf=aom_ctc=1:log_path='$BASENAME-vmaf.xml':log_fmt=xml' -f null -
+      ;;
+  esac
   ;;
 x265-rt)
   $($TIMER $X265 -r $BASENAME.y4m --preset slow --tune zerolatency --rc-lookahead 0 --bframes 0 --frame-threads 1 --min-keyint $KFINT --keyint $KFINT --no-scenecut --crf=$x --csv $BASENAME.csv -o $BASENAME.x265 $EXTRA_OPTIONS $FILE  > "$BASENAME-stdout.txt")
@@ -627,7 +649,7 @@ mv core.* core 2>/dev/null || true
 
 if [ -f "$VMAF" ]; then
   case $CODEC in
-    svt-av1-as | svt-av1-as-ctc)
+    svt-av1-as | svt-av1-as-ctc | x264-as-ctc | x265-as-ctc)
     # Reduced-Libvmaf: Handle missing metrics at the computation side to make
     # life easier.
     line_to_append+='\    '
